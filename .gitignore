@@ -1,0 +1,13 @@
+kc
+*.5
+*.6
+*.8
+*.o
+*.a
+*.out
+*.swp
+_obj
+tags
+*.go~
+sandbox/main
+
