@@ -3,6 +3,8 @@ package main
 import (
     "fmt"
     "os"
+    "exec"
+    "log"
 
     "korat/parser"
     "korat/token"
@@ -423,8 +425,6 @@ const (
 
 var ver = goopt.Flag([]string{"-v","--version"},nil,
                      "show version and exit",   "")
-var filename = goopt.String([]string{"-f","--file"},
-                     "filename","input filename")
 
 func NewBindingSymTab() *BindingSymTab {
     return &BindingSymTab{0, map[int]string{}}
@@ -435,27 +435,45 @@ func NewVisitor(astf *File) *VisitorImpl {
             &vector.Vector{}, &vector.Vector{}, 0, map[int]Stmt{}, 0}
 }
 
+func StdExecve(argv []string, stopOnTrouble bool) (ok bool) {
+
+    var err os.Error
+    var cmd *exec.Cmd
+    var pt int = exec.PassThrough
+    var wmsg *os.Waitmsg
+    ok = true
+    cmd, err = exec.Run(argv[0], argv, os.Environ(), "", pt, pt, pt)
+
+    if err != nil {
+        if stopOnTrouble {
+            log.Fatalf("[ERROR] %s\n", err)
+        } else {
+            log.Printf("[ERROR] %s\n", err)
+        }
+        ok = false
+
+    } else {
+
+        wmsg, err = cmd.Wait(0)
+
+        if err != nil || wmsg.WaitStatus.ExitStatus() != 0 {
+
+            if err != nil {
+                log.Printf("[ERROR] %s\n", err)
+            }
+
+            if stopOnTrouble {
+                os.Exit(1)
+            }
+
+            ok = false
+        }
+    }
+
+    return ok
+}
+
 func main() {
-
-    // dump.Dump2(NewStruct0("type A casestruct { value int; b interface{} }").Specs[0].(*TypeSpec).Type.(*StructType).Fields.List)
-    //dump.Dump2(NewExpr(`&Node{"*main.Mul",-1, nil,
-    //[]*Node{&Node{"*main.Const", 0, nil, nil},
-    //        &Node{"*main.Const", 1, nil, nil}}}`))
-
-    /*
-    dump.Dump2(NewStmtList(`
-    b:=map[int]interface{};
-    switch {
-        case pattern.Match(input, b):
-            x := b[0].(int)
-            return x
-        case true:
-            return false
-    }`)[0])
-    */
-    //dump.Dump2(NewExpr(`_case_0(input,b)`))
-    // dump.Dump2(NewStmtList("var __b *pattern.Binding = nil")[0])
-    //return
 
     goopt.Version = fmt.Sprintf("%d.%d",VER_MAJOR,VER_MINOR)
     goopt.Summary = PROG_NAME
@@ -467,12 +485,34 @@ func main() {
         return
     }
 
+    var filename string = ""
+    if len(goopt.Args) == 1 {
+        filename = goopt.Args[0]
+    } else {
+        fmt.Print(goopt.Usage())
+        return
+    }
+
     fset := token.NewFileSet()
-    astf,err := parser.ParseFile(fset, *filename, nil, 0)
+    astf,err := parser.ParseFile(fset, filename, nil, 0)
     if err == nil  {
         v := NewVisitor(astf)
         Walk(v, astf)
-        printer.Fprint(os.Stdout,fset,astf)
+        tempfile,err := os.Open(filename + "k", os.O_WRONLY | os.O_CREATE, 0665)
+        if err == nil {
+            printer.Fprint(tempfile,fset,astf)
+            tempfile.Close()
+            newArgs := make([]string, len(os.Args))
+            copy(newArgs, os.Args)
+            for i,v := range newArgs {
+                if v == filename {
+                    newArgs[i] = filename + "k"
+                }
+            }
+            newArgs[0] = os.Getenv("GOROOT") + "/bin/" + "8g"
+            StdExecve(newArgs, true)
+            os.Remove(filename + "k")
+        }
     } else {
         fmt.Printf("%s\n", err)
     }
