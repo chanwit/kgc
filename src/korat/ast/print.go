@@ -22,10 +22,11 @@ type FieldFilter func(name string, value reflect.Value) bool
 // NotNilFilter returns true for field values that are not nil;
 // it returns false otherwise.
 func NotNilFilter(_ string, value reflect.Value) bool {
-	v, ok := value.(interface {
-		IsNil() bool
-	})
-	return !ok || !v.IsNil()
+	//v, ok := value.(interface {
+	//	IsNil() bool
+	//})
+	//return !ok || !v.IsNil()
+    return value.IsNil()
 }
 
 
@@ -57,7 +58,7 @@ func Fprint(w io.Writer, x interface{}, f FieldFilter) (n int, err os.Error) {
 		p.printf("nil\n")
 		return
 	}
-	p.print(reflect.NewValue(x))
+	p.print(reflect.ValueOf(x))
 	p.printf("\n")
 
 	return
@@ -152,22 +153,23 @@ func (p *printer) print(x reflect.Value) {
 		return
 	}
 
-	switch v := x.(type) {
-	case *reflect.InterfaceValue:
+    v := x
+	switch x.Kind() {
+	case reflect.Interface:
 		p.print(v.Elem())
 
-	case *reflect.MapValue:
+	case reflect.Map:
 		p.printf("%s (len = %d) {\n", x.Type().String(), v.Len())
 		p.indent++
-		for _, key := range v.Keys() {
+		for _, key := range v.MapKeys() {
 			p.print(key)
 			p.printf(": ")
-			p.print(v.Elem(key))
+			p.print(v.MapIndex(key))
 		}
 		p.indent--
 		p.printf("}")
 
-	case *reflect.PtrValue:
+	case reflect.Ptr:
 		p.printf("*")
 		// type-checked ASTs may contain cycles - use ptrmap
 		// to keep track of objects that have been printed
@@ -180,7 +182,7 @@ func (p *printer) print(x reflect.Value) {
 			p.print(v.Elem())
 		}
 
-	case *reflect.SliceValue:
+	case reflect.Slice:
 		if s, ok := v.Interface().([]byte); ok {
 			p.printf("%#q", s)
 			return
@@ -189,16 +191,16 @@ func (p *printer) print(x reflect.Value) {
 		p.indent++
 		for i, n := 0, v.Len(); i < n; i++ {
 			p.printf("%d: ", i)
-			p.print(v.Elem(i))
+			p.print(v.Index(i))
 			p.printf("\n")
 		}
 		p.indent--
 		p.printf("}")
 
-	case *reflect.StructValue:
+	case reflect.Struct:
 		p.printf("%s {\n", x.Type().String())
 		p.indent++
-		t := v.Type().(*reflect.StructType)
+		t := v.Type()
 		for i, n := 0, t.NumField(); i < n; i++ {
 			name := t.Field(i).Name
 			value := v.Field(i)

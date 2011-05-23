@@ -498,7 +498,7 @@ func main() {
     if err == nil  {
         v := NewVisitor(astf)
         Walk(v, astf)
-        tempfile,err := os.Open(filename + "k", os.O_WRONLY | os.O_CREATE, 0665)
+        tempfile,err := os.OpenFile(filename + "k", os.O_WRONLY | os.O_CREATE, 0665)
         if err == nil {
             printer.Fprint(tempfile,fset,astf)
             tempfile.Close()
@@ -509,7 +509,13 @@ func main() {
                     newArgs[i] = filename + "k"
                 }
             }
-            newArgs[0] = os.Getenv("GOROOT") + "/bin/" + "8g"
+            gc := "8g"
+            switch os.Getenv("GOARCH") {
+                case "386": gc = "8g"
+                case "amd64": gc = "6g"
+                case "arm": gc = "5g"
+            }
+            newArgs[0] = os.Getenv("GOROOT") + "/bin/" + gc
             StdExecve(newArgs, true)
             os.Remove(filename + "k")
         }

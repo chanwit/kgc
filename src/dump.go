@@ -43,10 +43,10 @@ func Fdump(out io.Writer, v_ interface{}) {
         printf := func(s string, args ...interface{}) { fmt.Fprintf(out, s, args...) }
 
         // prevent circular for composite types
-        switch o := v.(type) {
-        case nil:
-            // do nothing
-        case *r.ArrayValue, *r.SliceValue, *r.MapValue, *r.PtrValue, *r.StructValue, *r.InterfaceValue:
+        switch v.Kind() {
+        // case nil:
+        // do nothing
+        case r.Array, r.Slice, r.Map, r.Ptr, r.Struct, r.Interface:
             addr := v.Addr()
             key := fmt.Sprintf("%x %v", addr, v.Type())
             if _, exists := done[key]; exists {
@@ -60,13 +60,13 @@ func Fdump(out io.Writer, v_ interface{}) {
             // do nothing
         }
 
-        switch o := v.(type) {
-        case *r.ArrayValue:
+        switch v.Kind() {
+        case r.Array:
             padprefix()
-            printf("[%d]%s {\n", o.Len(), o.Type().(*r.ArrayType).Elem())
-            for i := 0; i < o.Len(); i++ {
-                dump0(o.Elem(i), d+1)
-                if i != o.Len()-1 {
+            printf("[%d]%s {\n", v.Len(), v.Type().Elem())
+            for i := 0; i < v.Len(); i++ {
+                dump0(v.Index(i), d+1)
+                if i != v.Len()-1 {
                     printf(",\n")
                 }
             }
@@ -74,15 +74,15 @@ func Fdump(out io.Writer, v_ interface{}) {
             pad()
             print("}")
 
-        case *r.SliceValue:
+        case r.Slice:
             padprefix()
-            if o.Len()==0 {
-                printf("[]%s (len=%d)", o.Type().(*r.SliceType).Elem(), o.Len())
+            if v.Len()==0 {
+                printf("[]%s (len=%d)", v.Type().Elem(), v.Len())
             } else {
-                printf("[]%s (len=%d) {\n", o.Type().(*r.SliceType).Elem(), o.Len())
-                for i := 0; i < o.Len(); i++ {
-                    dump0(o.Elem(i), d+1)
-                    if i != o.Len()-1 {
+                printf("[]%s (len=%d) {\n", v.Type().Elem(), v.Len())
+                for i := 0; i < v.Len(); i++ {
+                    dump0(v.Index(i), d+1)
+                    if i != v.Len()-1 {
                         printf(",\n")
                     }
                 }
@@ -91,15 +91,15 @@ func Fdump(out io.Writer, v_ interface{}) {
                 print("}")
             }
 
-        case *r.MapValue:
+        case r.Map:
             padprefix()
-            t := o.Type().(*r.MapType)
+            t := v.Type()
             printf("map[%s]%s {\n", t.Key(), t.Elem())
-            for i, k := range o.Keys() {
+            for i, k := range v.MapKeys() {
                 dump0(k, d+1)
                 printf(": ")
-                dump(o.Elem(k), d+1, &emptyString, nil)
-                if i != o.Len()-1 {
+                dump(v.MapIndex(k), d+1, &emptyString, nil)
+                if i != v.Len()-1 {
                     printf(",\n")
                 }
             }
@@ -107,26 +107,26 @@ func Fdump(out io.Writer, v_ interface{}) {
             pad()
             print("}")
 
-        case *r.PtrValue:
+        case r.Ptr:
             padprefix()
-            if o.Elem() == nil {
-                printf("(*%s) nil", o.Type().(*r.PtrType).Elem())
+            if v.Elem().IsNil() {
+                printf("(*%s) nil", v.Type().Elem())
             } else {
                 print("&")
-                dump(o.Elem(), d, &emptyString, nil)
+                dump(v.Elem(), d, &emptyString, nil)
             }
 
-        case *r.StructValue:
+        case r.Struct:
             padprefix()
-            t := o.Type().(*r.StructType)
+            t := v.Type()
             printf("%s {\n", t)
             d += 1
-            for i := 0; i < o.NumField(); i++ {
+            for i := 0; i < v.NumField(); i++ {
                 pad()
                 printv(t.Field(i).Name)
                 printv(": ")
-                dump(o.Field(i), d, &emptyString, nil)
-                if i != o.NumField()-1 {
+                dump(v.Field(i), d, &emptyString, nil)
+                if i != v.NumField()-1 {
                     printf(",\n")
                 }
             }
@@ -135,43 +135,56 @@ func Fdump(out io.Writer, v_ interface{}) {
             pad()
             print("}")
 
-        case *r.InterfaceValue:
+        case r.Interface:
             padprefix()
-            t := o.Type().(*r.InterfaceType)
+            t := v.Type()
             printf("(%s) ", t)
-            dump(o.Elem(), d, &emptyString, nil)
+            dump(v.Elem(), d, &emptyString, nil)
 
-        case *r.StringValue:
+        case r.String:
             padprefix()
-            printv(strconv.Quote(o.Get()))
+            printv(strconv.Quote(v.String()))
 
-        case *r.BoolValue,
-            *r.IntValue,
-            *r.FloatValue:
+        case r.Bool,
+            r.Int,
+            r.Int8,
+            r.Int16,
+            r.Int32,
+            r.Int64,
+            r.Uint,
+            r.Uint8,
+            r.Uint16,
+            r.Uint32,
+            r.Uint64,
+            r.Uintptr,
+            r.Float32,
+            r.Float64,
+            r.Complex64,
+            r.Complex128:
             padprefix()
             //printv(o.Interface());
-            i := o.Interface()
+            i := v.Interface()
             if stringer, ok := i.(interface {
                 String() string
             }); ok {
-                printf("(%v) %s", o.Type(), stringer.String())
+                printf("(%v) %s", v.Type(), stringer.String())
             } else {
                 printv(i)
             }
 
-        case nil:
-            padprefix()
-            printv("nil")
-
         default:
             padprefix()
-            printf("(%v) %v", o.Type(), o.Interface())
+            if v.IsNil() {
+                printv("nil")
+            } else {
+                printf("(%v) %v", v.Type(), v.Interface())
+            }            
         }
     }
 
     dump0 = func(v r.Value, d int) { dump(v, d, nil, nil) }
 
-    v := r.NewValue(v_)
+    v := r.ValueOf(v_)
     dump0(v, 0)
     fmt.Fprintf(out, "\n")
 }
@@ -210,12 +223,12 @@ func Fdump2(out io.Writer, v_ interface{}, linedem string) {
         printf := func(s string, args ...interface{}) { fmt.Fprintf(out, s, args...) }
 
         // prevent circular for composite types
-        switch o := v.(type) {
-        case nil:
+        switch v.Kind() {
+        // case nil:
             // do nothing
-        case *r.ArrayValue, *r.SliceValue,
-             *r.MapValue,   *r.PtrValue,
-             *r.StructValue, *r.InterfaceValue:
+        case r.Array, r.Slice,
+             r.Map, r.Ptr,
+             r.Struct, r.Interface:
             addr := v.Addr()
             key := fmt.Sprintf("%x %v", addr, v.Type())
             if _, exists := done[key]; exists {
@@ -229,13 +242,13 @@ func Fdump2(out io.Writer, v_ interface{}, linedem string) {
             // do nothing
         }
 
-        switch o := v.(type) {
-        case *r.ArrayValue:
+        switch v.Kind() {
+        case r.Array:
             padprefix()
-            printf("[%d]%s {\n", o.Len(), o.Type().(*r.ArrayType).Elem())
-            for i := 0; i < o.Len(); i++ {
-                dump0(o.Elem(i), d+1)
-                if i != o.Len()-1 {
+            printf("[%d]%s {\n", v.Len(), v.Type().Elem())
+            for i := 0; i < v.Len(); i++ {
+                dump0(v.Index(i), d+1)
+                if i != v.Len()-1 {
                     printf(",\n")
                 }
             }
@@ -243,15 +256,15 @@ func Fdump2(out io.Writer, v_ interface{}, linedem string) {
             pad()
             print("}")
 
-        case *r.SliceValue:
+        case r.Slice:
             padprefix()
-            if o.Len()==0 {
-                printf("[]%s{}", o.Type().(*r.SliceType).Elem())
+            if v.Len()==0 {
+                printf("[]%s{}", v.Type().Elem())
             } else {
-                printf("[]%s {\n", o.Type().(*r.SliceType).Elem())
-                for i := 0; i < o.Len(); i++ {
-                    dump0(o.Elem(i), d+1)
-                    if i != o.Len()-1 {
+                printf("[]%s {\n", v.Type().Elem())
+                for i := 0; i < v.Len(); i++ {
+                    dump0(v.Index(i), d+1)
+                    if i != v.Len()-1 {
                         printf(",\n")
                     }
                 }
@@ -259,41 +272,41 @@ func Fdump2(out io.Writer, v_ interface{}, linedem string) {
                 print(" }")
             }
 
-        case *r.MapValue:
+        case r.Map:
             padprefix()
-            t := o.Type().(*r.MapType)
+            t := v.Type()
             printf("map[%s]%s {\n", t.Key(), t.Elem())
-            for i, k := range o.Keys() {
+            for i, k := range v.MapKeys() {
                 dump0(k, d+1)
                 printf(": ")
-                dump(o.Elem(k), d+1, &emptyString, nil)
-                if i != o.Len()-1 {
+                dump(v.MapIndex(k), d+1, &emptyString, nil)
+                if i != v.Len()-1 {
                     printf(",\n")
                 }
             }
             print(linedem)
             print(" }")
 
-        case *r.PtrValue:
+        case r.Ptr:
             padprefix()
-            if o.Elem() == nil {
+            if v.Elem().IsNil() {
                 printf("nil") // , o.Type().(*r.PtrType).Elem())
             } else {
                 print("&")
-                dump(o.Elem(), d, &emptyString, nil)
+                dump(v.Elem(), d, &emptyString, nil)
             }
 
-        case *r.StructValue:
+        case r.Struct:
             padprefix()
-            t := o.Type().(*r.StructType)
+            t := v.Type()
             printf("%s {\n", t)
             d += 1
-            for i := 0; i < o.NumField(); i++ {
+            for i := 0; i < v.NumField(); i++ {
                 pad()
                 printv(t.Field(i).Name)
                 printv(": ")
-                dump(o.Field(i), d, &emptyString, nil)
-                if i != o.NumField()-1 {
+                dump(v.Field(i), d, &emptyString, nil)
+                if i != v.NumField()-1 {
                     printf(",\n")
                 }
             }
@@ -301,40 +314,53 @@ func Fdump2(out io.Writer, v_ interface{}, linedem string) {
             print(linedem)
             print(" }")
 
-        case *r.InterfaceValue:
+        case r.Interface:
             padprefix()
-            dump(o.Elem(), d, &emptyString, nil)
+            dump(v.Elem(), d, &emptyString, nil)
 
-        case *r.StringValue:
+        case r.String:
             padprefix()
-            printv(strconv.Quote(o.Get()))
+            printv(strconv.Quote(v.String()))
 
-        case *r.BoolValue,
-            *r.IntValue,
-            *r.FloatValue:
+        case r.Bool,
+            r.Int,
+            r.Int8,
+            r.Int16,
+            r.Int32,
+            r.Int64,
+            r.Uint,
+            r.Uint8,
+            r.Uint16,
+            r.Uint32,
+            r.Uint64,
+            r.Uintptr,
+            r.Float32,
+            r.Float64,
+            r.Complex64,
+            r.Complex128:
             padprefix()
-            i := o.Interface()
+            i := v.Interface()
             if stringer, ok := i.(interface {
                 String() string
             }); ok {
-                printf("%s", o.Type(), stringer.String())
+                printf("%s", v.Type(), stringer.String())
             } else {
                 printv(i)
             }
 
-        case nil:
+        default:            
             padprefix()
-            printv("nil")
-
-        default:
-            padprefix()
-            printf("%v", o.Interface())
+            if v.IsNil() {
+                printv("nil")
+            } else {
+                printf("%v", v.Interface())
+            }
         }
     }
 
     dump0 = func(v r.Value, d int) { dump(v, d, nil, nil) }
 
-    v := r.NewValue(v_)
+    v := r.ValueOf(v_)
     dump0(v, 0)
     fmt.Fprintf(out, "\n")
 }
