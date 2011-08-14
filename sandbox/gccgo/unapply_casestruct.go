@@ -5,7 +5,8 @@ import "fmt"
 import "time"
 import "strconv"
 
-type Expr trait {}
+type Expr trait {
+}
 
 type Const casestruct borrows Expr {
     value  int

@@ -20,8 +20,8 @@ type Var struct {
 	name string
 }
 type Mul struct {
-	left	Expr
-	right	Expr
+	left  Expr
+	right Expr
 }
 
 func main() {
@@ -33,22 +33,22 @@ func main() {
 
 	switch {
 	case pattern.Match(input, &pattern.Node{
-		reflect.Typeof(&Mul{}),
+		reflect.TypeOf(&Mul{}),
 		-1, nil, []*pattern.Node{&pattern.
-			Node{reflect.Typeof(&Const{}),
+			Node{reflect.TypeOf(&Const{}),
 			-1, nil, []*pattern.Node{&pattern.
 				Node{nil, -1, 10,
 
 				nil}}},
-			&pattern.Node{reflect.Typeof(&Const{}),
+			&pattern.Node{reflect.TypeOf(&Const{}),
 				-1, nil,
 				[]*pattern.Node{&pattern.Node{nil, -1,
 					20, nil}}}}}, __b1):
 		fmt.Printf("matched\n")
 	case pattern.Match(input, &pattern.Node{
-		reflect.Typeof(&Mul{}),
+		reflect.TypeOf(&Mul{}),
 		-1, nil, []*pattern.Node{&pattern.
-			Node{reflect.Typeof(&Const{}),
+			Node{reflect.TypeOf(&Const{}),
 			-1, nil, []*pattern.Node{&pattern.
 				Node{nil, 0, nil,
 
@@ -71,8 +71,7 @@ func NewConst(value int) (r *Const) {
 }
 func (u *Const) Unapply() (s *pattern.Some) {
 
-	s = &pattern.Some{u.value,
-	}
+	s = &pattern.Some{u.value}
 	return
 
 }
@@ -89,8 +88,7 @@ func NewVar(name string) (r *Var) {
 }
 func (u *Var) Unapply() (s *pattern.Some) {
 
-	s = &pattern.Some{u.name,
-	}
+	s = &pattern.Some{u.name}
 	return
 
 }

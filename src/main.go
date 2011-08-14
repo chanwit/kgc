@@ -437,37 +437,19 @@ func NewVisitor(astf *File) *VisitorImpl {
 
 func StdExecve(argv []string, stopOnTrouble bool) (ok bool) {
 
-    var err os.Error
-    var cmd *exec.Cmd
-    var pt int = exec.PassThrough
-    var wmsg *os.Waitmsg
     ok = true
-    cmd, err = exec.Run(argv[0], argv, os.Environ(), "", pt, pt, pt)
+		cmd := exec.Command(argv[0], argv[1:]...)
+		_, err := cmd.Output()
 
     if err != nil {
         if stopOnTrouble {
             log.Fatalf("[ERROR] %s\n", err)
+            os.Exit(1)
         } else {
             log.Printf("[ERROR] %s\n", err)
         }
-        ok = false
 
-    } else {
-
-        wmsg, err = cmd.Wait(0)
-
-        if err != nil || wmsg.WaitStatus.ExitStatus() != 0 {
-
-            if err != nil {
-                log.Printf("[ERROR] %s\n", err)
-            }
-
-            if stopOnTrouble {
-                os.Exit(1)
-            }
-
-            ok = false
-        }
+				ok = false
     }
 
     return ok
